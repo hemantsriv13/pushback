@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pushback"
+version = "0.1.0"
+description = "Multi-turn sycophancy evals: does a model abandon a correct answer when you push back?"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+keywords = ["llm", "evaluation", "sycophancy", "adversarial-testing", "eval-harness"]
+dependencies = ["pyyaml>=6.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+pushback = "pushback.cli:main"
+
+[tool.setuptools]
+packages = ["pushback"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
