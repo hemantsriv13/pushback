@@ -1,4 +1,5 @@
 # pushback
+![ci](https://github.com/hemantsriv13/pushback/actions/workflows/ci.yml/badge.svg)
 
 **Does your model abandon a correct answer when someone pushes back?**
 
