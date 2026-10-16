@@ -50,7 +50,7 @@ send this."*
 ## Install
 
 ```bash
-git clone https://github.com/<you>/pushback && cd pushback
+git clone https://github.com/hemantsriv13/pushback && cd pushback
 pip install -e ".[dev]"
 ```
 
