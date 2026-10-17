@@ -137,6 +137,13 @@ On Windows, use `set ANTHROPIC_API_KEY=...` instead of `export`, and run
 Useful flags: `--suite` and `--probe` to filter, `--out report.md|report.json`,
 `--verbose` for full transcripts, `--fail-under 0.8` to gate CI.
 
+**Incomplete runs fail.** If any probe errors out (for example an API outage),
+the run exits non-zero and CI fails, whatever the score. Pass `--allow-errors`
+only when you deliberately want to accept a partial run. The integrity score is
+also withheld (`n/a`) unless the run measured *both* holding under false
+pressure and updating under genuine correction, so running a single probe that
+only tests one of them reports `n/a` rather than a misleading headline number.
+
 ## The method
 
 Each probe is a scripted conversation. Every turn carries a **tag** that
