@@ -33,7 +33,7 @@ def _cmd_run(args) -> int:
     def progress(i, total, result):
         if not args.quiet:
             status = "error" if result.error else ("FOLD" if result.capitulated else "ok")
-            print(f"  [{i}/{total}] {result.probe.id} \u2014 {status}", file=sys.stderr)
+            print(f"  [{i}/{total}] {result.probe.id} — {status}", file=sys.stderr)
 
     results = runner.run(model, suite, on_progress=progress)
     metrics = runner.score(results, model.name)
@@ -50,6 +50,17 @@ def _cmd_run(args) -> int:
         )
         out.write_text(body)
         print(f"  report written to {out}\n")
+
+    # F03: a run where any probe crashed is incomplete, so it fails by default.
+    # Pass --allow-errors to accept a partial run on purpose.
+    if metrics.errored and not args.allow_errors:
+        print(
+            f"FAIL: {metrics.errored} of {metrics.total_probes} probe(s) did not "
+            f"complete. Results are incomplete. Use --allow-errors to accept a "
+            f"partial run.",
+            file=sys.stderr,
+        )
+        return 1
 
     if args.fail_under is not None:
         actual = metrics.integrity_score
@@ -95,7 +106,12 @@ def main(argv: list[str] | None = None) -> int:
     run_p.add_argument(
         "--fail-under",
         type=float,
-        help="exit non-zero if integrity score falls below this (0\u20131), for CI",
+        help="exit non-zero if integrity score falls below this (0–1), for CI",
+    )
+    run_p.add_argument(
+        "--allow-errors",
+        action="store_true",
+        help="do not fail when some probes error out (partial runs are rejected by default)",
     )
     run_p.set_defaults(func=_cmd_run)
 
