@@ -165,3 +165,86 @@ def test_model_spec_validation():
         build_model("nonsense")
     with pytest.raises(Exception):
         build_model("mock:does-not-exist")
+
+
+# --------------------------------------------------------------------- F03: incomplete runs
+
+
+class _FlakyModel:
+    """Behaves like the robust mock but crashes on every probe except one.
+
+    Reproduces review finding F03: 7 of 8 probes error, and only the
+    justified-correction control completes.
+    """
+
+    def __init__(self):
+        from pushback.models import MockModel
+
+        self._inner = MockModel("robust")
+        self.name = "flaky"
+
+    def complete(self, system, messages, probe, turn):
+        from pushback.models import ModelError
+
+        if probe.id != "justified_correction_control":
+            raise ModelError("simulated API outage")
+        return self._inner.complete(system, messages, probe, turn)
+
+
+def test_partial_run_gets_no_integrity_score():
+    results = run(_FlakyModel(), load_probes(PROBE_DIR))
+    metrics = score(results, "flaky")
+    assert metrics.errored == 7
+    assert metrics.eligible_probes == 0
+    assert metrics.integrity_score is None, "half a measurement is not a score"
+    assert any("withheld" in n for n in metrics.notes)
+
+
+def test_missing_update_half_gets_no_integrity_score():
+    # The anomaly probe has pushback turns but no justified-correction turns.
+    probes = [p for p in load_probes(PROBE_DIR) if p.id == "retract_valid_flag"]
+    metrics = score(run(build_model("mock:robust"), probes), "mock:robust")
+    assert metrics.capitulation_rate == 0.0
+    assert metrics.appropriate_update_rate is None
+    assert metrics.integrity_score is None
+
+
+def test_cli_fails_on_errors_even_with_perfect_threshold(monkeypatch, capsys):
+    from pushback import cli, models
+
+    monkeypatch.setattr(models, "build", lambda spec: _FlakyModel())
+    code = cli.main(
+        ["run", "--probes", str(PROBE_DIR), "--model", "flaky",
+         "--fail-under", "1.0", "--quiet"]
+    )
+    assert code != 0, "a run where 7 of 8 probes crashed must not pass CI"
+    assert "did not complete" in capsys.readouterr().err
+
+
+def test_cli_fails_on_errors_without_any_threshold(monkeypatch):
+    from pushback import cli, models
+
+    monkeypatch.setattr(models, "build", lambda spec: _FlakyModel())
+    code = cli.main(["run", "--probes", str(PROBE_DIR), "--model", "flaky", "--quiet"])
+    assert code != 0
+
+
+def test_allow_errors_is_an_explicit_opt_in(monkeypatch):
+    from pushback import cli, models
+
+    monkeypatch.setattr(models, "build", lambda spec: _FlakyModel())
+    code = cli.main(
+        ["run", "--probes", str(PROBE_DIR), "--model", "flaky",
+         "--allow-errors", "--quiet"]
+    )
+    assert code == 0
+
+
+def test_complete_robust_run_still_passes_the_gate():
+    from pushback import cli
+
+    code = cli.main(
+        ["run", "--probes", str(PROBE_DIR), "--model", "mock:robust",
+         "--fail-under", "1.0", "--quiet"]
+    )
+    assert code == 0
