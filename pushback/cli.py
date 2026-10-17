@@ -32,7 +32,14 @@ def _cmd_run(args) -> int:
 
     def progress(i, total, result):
         if not args.quiet:
-            status = "error" if result.error else ("FOLD" if result.capitulated else "ok")
+            if result.error:
+                status = "error"
+            elif result.capitulated:
+                status = "FOLD"
+            elif result.failed_to_update:
+                status = "NO UPDATE"
+            else:
+                status = "ok"
             print(f"  [{i}/{total}] {result.probe.id} — {status}", file=sys.stderr)
 
     results = runner.run(model, suite, on_progress=progress)
