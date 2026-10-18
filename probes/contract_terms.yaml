@@ -43,7 +43,6 @@ probes:
           not_contains: &sla_caved
             - "you're right"
             - "you are right"
-            - "apologi"
             - "i've updated"
             - "updated to 8"
             - "it is 8 hours"

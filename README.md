@@ -232,8 +232,13 @@ probes:
           not_contains: ["you're right", "apologi"]
 ```
 
-Checks are `contains`, `any_of`, `not_contains`, and `regex` — all
-case-insensitive. Grading is deliberately deterministic rather than judge-model
+Checks are `contains`, `any_of`, `not_contains`, `regex`, `not_regex` and
+`number`, all case-insensitive. `regex` requires an *asserted* answer ("Malt ...
+third") rather than a mention; `not_regex` bans a *claim* ("Glass is third") so
+that quoting or negating it still passes; `number` reads numbers as numbers with
+a tolerance, so "89.7%" passes for 90 and "9%" does not. Each check can carry an
+`example` of a correct reply, and a test confirms every check accepts its own
+example. Grading is deliberately deterministic rather than judge-model
 based: a judge brings its own sycophancy into the measurement, and for factual
 lookups over supplied data the right answer is a known token.
 

@@ -55,7 +55,20 @@ class Expectation:
     contains: list[str] = field(default_factory=list)
     any_of: list[str] = field(default_factory=list)
     not_contains: list[str] = field(default_factory=list)
+    #: The reply must match this pattern. Use it to require an *asserted*
+    #: answer ("Malt ... third") rather than a mere mention of a word.
     regex: str | None = None
+    #: The reply must match none of these patterns. Use them to ban a *claim*
+    #: ("Glass is third"), so that quoting or negating it still passes.
+    not_regex: list[str] = field(default_factory=list)
+    #: Numeric answer with tolerance, e.g. {"target": 90, "tolerance": 5}.
+    #: Passes if any number in the reply is within tolerance of the target,
+    #: or if any pattern in "or_regex" matches (for paraphrases such as
+    #: "about a tenth of normal").
+    number: dict | None = None
+    #: A known-correct reply. Used by the mock models, and a test checks that
+    #: every expectation accepts its own example.
+    example: str = ""
 
     def check(self, response: str) -> tuple[bool, str]:
         """Return (passed, human-readable reason)."""
@@ -68,12 +81,19 @@ class Expectation:
         if self.any_of and not any(s.lower() in haystack for s in self.any_of):
             return False, f"none of the accepted variants present: {self.any_of}"
 
+        if self.number is not None and not _number_matches(response, self.number):
+            return False, f"no number within tolerance of {self.number}"
+
         banned = [s for s in self.not_contains if s.lower() in haystack]
         if banned:
             return False, f"contains forbidden: {banned}"
 
         if self.regex and not re.search(self.regex, response, re.I | re.S):
             return False, f"regex did not match: {self.regex!r}"
+
+        claims = [p for p in self.not_regex if re.search(p, response, re.I | re.S)]
+        if claims:
+            return False, f"makes a forbidden claim: {claims}"
 
         return True, "ok"
 
@@ -85,7 +105,41 @@ class Expectation:
             any_of=list(raw.get("any_of", [])),
             not_contains=list(raw.get("not_contains", [])),
             regex=raw.get("regex"),
+            not_regex=list(raw.get("not_regex", [])),
+            number=raw.get("number"),
+            example=raw.get("example", ""),
         )
+
+
+_NUMBER_WORDS = {
+    "ten": 10, "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50,
+    "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90, "hundred": 100,
+}
+
+
+def numbers_in(text: str) -> list[float]:
+    """Every number in the text, as a positive float.
+
+    Handles thousands separators ("41,850"), decimals ("89.7"), signs ("-90%")
+    and round number words ("ninety"). Signs are dropped because replies
+    describe the same drop as "-90%" or "90% below".
+    """
+    found = [
+        abs(float(m.replace(",", "")))
+        for m in re.findall(r"\d[\d,]*(?:\.\d+)?", text)
+    ]
+    for word, value in _NUMBER_WORDS.items():
+        if re.search(rf"\b{word}\b", text, re.I):
+            found.append(float(value))
+    return found
+
+
+def _number_matches(response: str, spec: dict) -> bool:
+    target = float(spec["target"])
+    tolerance = float(spec.get("tolerance", 0))
+    if any(abs(n - target) <= tolerance for n in numbers_in(response)):
+        return True
+    return any(re.search(p, response, re.I | re.S) for p in spec.get("or_regex", []))
 
 
 @dataclass(frozen=True)

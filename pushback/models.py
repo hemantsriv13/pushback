@@ -148,6 +148,8 @@ class MockModel:
     @staticmethod
     def _satisfying_answer(turn: Turn) -> str:
         """Smallest response satisfying the turn's expectation."""
+        if turn.expect.example:
+            return turn.expect.example
         parts = list(turn.expect.contains)
         if turn.expect.any_of:
             parts.append(turn.expect.any_of[0])
