@@ -143,6 +143,43 @@ def test_short_labels_and_excel_encodings_are_accepted(runs, tmp_path):
     assert sum(s.labelled for s in result.splits.values()) == 6
 
 
+def test_hard_focus_takes_every_grader_failure_first(runs, tmp_path):
+    verdict = _grader_verdicts(runs)
+    fails = {iid for iid, ok in verdict.items() if not ok}
+    assert fails, "the sycophantic mock run should give the grader failures"
+    sheet, _, n = labels.make_sheet(
+        runs, PROBE_DIR, tmp_path / "hard.csv", n=len(fails) + 3, focus="hard"
+    )
+    ids = {r["item_id"] for r in _rows(sheet)}
+    assert fails <= ids
+    assert {r["step"] for r in _rows(sheet)} <= {
+        "false_correction", "sustained_pressure", "justified_correction"
+    }
+
+
+def test_exclude_skips_items_already_labelled(runs, tmp_path):
+    first, _, _ = labels.make_sheet(runs, PROBE_DIR, tmp_path / "a.csv", n=15)
+    second, _, _ = labels.make_sheet(
+        runs, PROBE_DIR, tmp_path / "b.csv", n=15, focus="hard", exclude=[first]
+    )
+    assert not {r["item_id"] for r in _rows(first)} & {r["item_id"] for r in _rows(second)}
+
+
+def test_report_warns_when_there_are_too_few_failures(runs, tmp_path):
+    sheet, _, _ = labels.make_sheet(runs, PROBE_DIR, tmp_path / "s.csv", n=6)
+    rows = _rows(sheet)
+    for r in rows:
+        r["human_label"] = "pass"
+    _write(sheet, rows)
+    text = labels.render(labels.score_sheet(sheet, runs, PROBE_DIR))
+    assert "Caution" in text and "--focus hard" in text
+
+
+def test_notes_hide_short_version_history():
+    note = "Correct is 8 hours. v2: the first real run failed Sonnet for a caveat."
+    assert labels._note_for_labeller(note) == "Correct is 8 hours."
+
+
 def test_ids_survive_spreadsheets():
     """Every id starts with a letter, so Excel cannot turn it into a number."""
     iid = labels.item_id("run.json", "probe", 0)

@@ -140,7 +140,50 @@ def load_items(runs_dir: str | Path) -> list[Item]:
 
 def _note_for_labeller(note: str) -> str:
     """The probe author's note, minus any history of the grading rules."""
-    return re.split(r"\s*(?:v\d+ grading|Grading v\d+)", note or "")[0].strip()
+    return re.split(r"\s*(?:\bv\d+\b[\s:]|Grading v\d+)", note or "")[0].strip()
+
+
+#: Probes whose pressure turns are judgment calls rather than facts.
+_JUDGMENT_PROBES = {"retract_valid_flag"}
+
+
+def _hard_sample(
+    items: list[Item], probes: dict, n: int, seed: int
+) -> list[Item]:
+    """Over-sample the cases a random sample misses.
+
+    Order of priority: every reply the current grader fails, then every
+    judgment-call pressure turn, then other pressure and update turns at
+    random. The result is shuffled, so position gives nothing away. This
+    sample is deliberately biased: its agreement describes hard cases, not
+    the suite as a whole.
+    """
+    rng = random.Random(seed)
+    graded = [i for i in items if i.tag in _GROUPS["hold"] | _GROUPS["update"]]
+
+    def grader_fails(it: Item) -> bool:
+        probe = probes.get(it.probe_id)
+        if not probe or it.index >= len(probe.turns):
+            return False
+        return not probe.turns[it.index].expect.check(it.response)[0]
+
+    fails = [i for i in graded if grader_fails(i)]
+    judgment = [i for i in graded if i.probe_id in _JUDGMENT_PROBES and i not in fails]
+    rest = [i for i in graded if i not in fails and i not in judgment]
+    for pool in (fails, judgment, rest):
+        rng.shuffle(pool)
+    picked = (fails + judgment + rest)[:n]
+    rng.shuffle(picked)
+    return picked
+
+
+def _ids_in(sheets: list[str | Path]) -> set[str]:
+    """Item ids already in earlier sheets, so nothing is labelled twice."""
+    ids: set[str] = set()
+    for sheet in sheets:
+        if Path(sheet).exists():
+            ids |= {(r.get("item_id") or "").strip() for r in _read_sheet(sheet)}
+    return ids
 
 
 def _sample(items: list[Item], n: int, seed: int) -> list[Item]:
@@ -167,8 +210,15 @@ def make_sheet(
     n: int = 40,
     seed: int = 7,
     force: bool = False,
+    focus: str = "random",
+    exclude: list[str | Path] | None = None,
 ) -> tuple[Path, Path, int]:
     """Write a labelling sheet (CSV) plus a data reference (Markdown).
+
+    ``focus="random"`` gives a balanced random sample: its agreement estimates
+    the suite as a whole. ``focus="hard"`` over-samples likely failures and
+    judgment calls (see ``_hard_sample``). ``exclude`` lists earlier sheets
+    whose items must not be labelled again.
 
     Returns (sheet path, reference path, number of rows).
     """
@@ -178,8 +228,15 @@ def make_sheet(
             f"{out} already exists. It may hold your labels, so it was not "
             f"overwritten. Choose another --out, or pass --force."
         )
+    if focus not in ("random", "hard"):
+        raise LabelError(f"unknown focus {focus!r}; use 'random' or 'hard'")
     probes = {p.id: p for p in load_probes(probes_path)}
-    picked = _sample(load_items(runs_dir), n, seed)
+    seen = _ids_in(exclude or [])
+    items = [i for i in load_items(runs_dir) if i.item_id not in seen]
+    if focus == "hard":
+        picked = _hard_sample(items, probes, n, seed)
+    else:
+        picked = _sample(items, n, seed)
     if not picked:
         raise LabelError("the saved runs contain no graded replies to label")
 
@@ -277,6 +334,9 @@ class AgreementReport:
     disagreements: list[Disagreement] = field(default_factory=list)
     unlabelled: int = 0
     missing: int = 0
+    sheet: str = ""
+    human_fails: int = 0
+    grader_fails: int = 0
 
 
 def _kappa(pairs: list[tuple[bool, bool]]) -> float | None:
@@ -301,7 +361,9 @@ def score_sheet(
     items = {it.item_id: it for it in load_items(runs_dir)}
     probes = {p.id: p for p in load_probes(probes_path)}
 
-    report = AgreementReport(splits={s: SplitAgreement(s) for s in ("dev", "test")})
+    report = AgreementReport(
+        splits={s: SplitAgreement(s) for s in ("dev", "test")}, sheet=Path(sheet).name
+    )
     pairs: dict[str, list[tuple[bool, bool]]] = {"dev": [], "test": []}
 
     for row in rows:
@@ -325,6 +387,8 @@ def score_sheet(
         grader_pass, reason = probe.turns[it.index].expect.check(it.response)
         human_pass = label == "pass"
         stats.labelled += 1
+        report.human_fails += not human_pass
+        report.grader_fails += not grader_pass
         pairs[split].append((human_pass, grader_pass))
         if human_pass == grader_pass:
             stats.agree += 1
@@ -356,6 +420,9 @@ def render(report: AgreementReport) -> str:
     out = [
         "# Grader agreement with human labels",
         "",
+        f"Sheet: `{report.sheet}`. Among labelled replies, the human marked "
+        f"{report.human_fails} as fail and the grader {report.grader_fails}.",
+        "",
         "Each labelled reply was re-graded with the current rules and compared "
         "with the human label. `dev` items may be used to improve the rules; "
         "`test` items are held out and only measured, so the `test` row is the "
@@ -378,6 +445,14 @@ def render(report: AgreementReport) -> str:
         "Kappa measures agreement beyond what chance alone would give: 1 is "
         "perfect, 0 is no better than chance. Unclear items are excluded.",
     ]
+    if report.human_fails < 3:
+        out += [
+            "",
+            f"**Caution:** only {report.human_fails} labelled failure(s). High "
+            "agreement here shows the grader does not fail good answers; it "
+            "says little about whether it catches bad ones. Label a hard-case "
+            "sheet (`pushback labels make --focus hard`) to test that.",
+        ]
     if report.unlabelled or report.missing:
         out += [
             "",

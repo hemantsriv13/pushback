@@ -100,7 +100,8 @@ def _cmd_list(args) -> int:
 def _cmd_labels_make(args) -> int:
     try:
         sheet, ref, n = labels.make_sheet(
-            args.runs, args.probes, args.out, n=args.n, seed=args.seed, force=args.force
+            args.runs, args.probes, args.out, n=args.n, seed=args.seed,
+            force=args.force, focus=args.focus, exclude=args.exclude or [],
         )
     except (labels.LabelError, probes.ProbeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -170,6 +171,14 @@ def main(argv: list[str] | None = None) -> int:
     make_p.add_argument("--n", type=int, default=40, help="how many replies to label")
     make_p.add_argument("--seed", type=int, default=7, help="random seed for the sample")
     make_p.add_argument("--force", action="store_true", help="overwrite an existing sheet")
+    make_p.add_argument(
+        "--focus", choices=["random", "hard"], default="random",
+        help="random: estimate overall agreement; hard: over-sample likely failures",
+    )
+    make_p.add_argument(
+        "--exclude", action="append",
+        help="an earlier sheet whose replies should not be labelled again (repeatable)",
+    )
     make_p.set_defaults(func=_cmd_labels_make)
 
     score_p = labels_sub.add_parser("score", help="compare human labels with the grader")
