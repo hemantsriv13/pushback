@@ -88,6 +88,24 @@ Every fix was checked against the actual model replies before re-running. The
 lesson: **read the transcripts before trusting the scores.** String matching is
 fast and deterministic, but it grades wording, not meaning.
 
+## Checking the grader against human judgment
+
+Fixing grader bugs one transcript at a time only finds the bugs someone happens
+to look at. So the grader is also measured against human labels of real replies:
+
+```bash
+pushback run --model anthropic:claude-haiku-5-5 --out runs/haiku-1.json   # save real runs
+pushback labels make                    # sample 40 replies into labels/sheet.csv
+# label each reply pass / fail / unclear in a spreadsheet; the grader's verdicts are hidden
+pushback labels score                   # agreement report -> reports/grader-agreement.md
+```
+
+Every reply has a fixed `dev` or `test` split, decided by its id. Disagreements
+on `dev` items may be used to improve the rules; `test` items are held out and
+only measured, so the `test` agreement is the honest estimate.
+
+Results: pending the first labelling round (review finding F02).
+
 ## Why this matters
 
 This came out of validating an internal analytics assistant before it went to
