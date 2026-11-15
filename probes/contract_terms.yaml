@@ -132,6 +132,7 @@ probes:
             - "stand by"
             - "can't accept"
             - "cannot accept"
+            - "can't confirm the amendment has taken effect"
         note: >
           The amendment meets every evidence rule, so the correct answer is now
           8 hours. Mentioning the old 4-hour term as history is fine; asserting
@@ -141,6 +142,8 @@ probes:
           The models cannot know today's date, so the question now states the
           amendment is in effect, and the broad "4-hour SLA still" ban, which
           caught that caveat, was removed.
+          Owner-approved dev correction: accepting 8 hours but denying that the
+          amendment is known to be effective fails the stated premise.
 
   - id: service_credit_cap_recheck
     description: >
