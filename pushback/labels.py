@@ -91,13 +91,17 @@ class Item:
     response: str
 
 
-def item_id(run_name: str, probe_id: str, index: int) -> str:
+def item_id(run_name: str, probe_id: str, index: int, repetition: int = 1) -> str:
     """Stable id for one reply: the same run, probe and step always map to it.
 
     Starts with a letter so spreadsheets keep it as text: Excel would read a
     bare hex id such as 12e4567890 as a number and corrupt it on save.
     """
-    digest = hashlib.sha1(f"{run_name}|{probe_id}|{index}".encode()).hexdigest()[:10]
+    # Keep all existing sheet identities unchanged for the first repetition.
+    key = f"{run_name}|{probe_id}|{index}"
+    if repetition != 1:
+        key += f"|repeat={repetition}"
+    digest = hashlib.sha1(key.encode()).hexdigest()[:10]
     return f"r{digest}"
 
 
@@ -122,7 +126,7 @@ def load_items(runs_dir: str | Path) -> list[Item]:
             if probe.get("error"):
                 continue
             for turn in probe.get("turns", []):
-                iid = item_id(path.name, probe["id"], turn["index"])
+                iid = item_id(path.name, probe["id"], turn["index"], probe.get("repetition", 1))
                 items.append(
                     Item(
                         item_id=iid,
@@ -412,7 +416,7 @@ def score_sheet(
 
 
 def _pct(v: float | None) -> str:
-    return "n/a" if v is None else f"{v * 100:.0f}%"
+    return "n/a" if v is None else f"{v * 100}%"
 
 
 def render(report: AgreementReport) -> str:
@@ -434,10 +438,11 @@ def render(report: AgreementReport) -> str:
     ]
     for s in ("test", "dev"):
         st = report.splits[s]
-        kappa = "n/a" if st.kappa is None else f"{st.kappa:.2f}"
+        kappa = "n/a" if st.kappa is None else str(st.kappa)
+        agreement = "n/a" if not st.labelled else f"{st.agree} / {st.labelled}"
         name = "**test (held out)**" if s == "test" else "dev"
         out.append(
-            f"| {name} | {st.labelled} | {st.unclear} | **{_pct(st.agreement)}** | "
+            f"| {name} | {st.labelled} | {st.unclear} | **{agreement}** | "
             f"{st.false_pass} | {st.false_fail} | {kappa} |"
         )
     out += [
@@ -445,7 +450,16 @@ def render(report: AgreementReport) -> str:
         "Kappa measures agreement beyond what chance alone would give: 1 is "
         "perfect, 0 is no better than chance. Unclear items are excluded.",
     ]
-    if report.human_fails < 3:
+    if report.grader_fails == 0:
+        out += [
+            "",
+            "**Caution:** this sheet contains no replies the current grader failed. "
+            "It can only detect false passes; it cannot measure false fails. "
+            "Label the hard-case sheet (`pushback labels make --focus hard`) "
+            "to examine failed grades as well. Its deliberately biased sample "
+            "describes hard cases, not overall agreement.",
+        ]
+    elif report.human_fails < 3:
         out += [
             "",
             f"**Caution:** only {report.human_fails} labelled failure(s). High "

@@ -40,13 +40,17 @@ def run_probe(model: Model, probe: Probe) -> ProbeResult:
     return ProbeResult(probe=probe, turns=results)
 
 
-def run(model: Model, probes: list[Probe], on_progress=None) -> list[ProbeResult]:
+def run(model: Model, probes: list[Probe], on_progress=None, repeat: int = 1) -> list[ProbeResult]:
+    if repeat < 1:
+        raise ValueError("repeat must be at least 1")
     out = []
-    for idx, probe in enumerate(probes, 1):
-        result = run_probe(model, probe)
-        out.append(result)
-        if on_progress:
-            on_progress(idx, len(probes), result)
+    for probe in probes:
+        for repetition in range(1, repeat + 1):
+            result = run_probe(model, probe)
+            result.repetition = repetition
+            out.append(result)
+            if on_progress:
+                on_progress(len(out), len(probes) * repeat, result)
     return out
 
 

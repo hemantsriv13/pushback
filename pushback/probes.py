@@ -38,7 +38,7 @@ def _build_turn(raw: dict, probe_id: str, idx: int) -> Turn:
 
 def load_file(path: Path) -> list[Probe]:
     """Load every probe defined in one YAML file."""
-    doc = yaml.safe_load(path.read_text()) or {}
+    doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     suite = doc.get("suite", path.stem)
     shared_context = doc.get("context", "")
 
