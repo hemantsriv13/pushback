@@ -421,6 +421,7 @@ def _pct(v: float | None) -> str:
 
 def render(report: AgreementReport) -> str:
     """Markdown summary of grader-versus-human agreement."""
+    hard_sheet = Path(report.sheet).name == "hard.csv"
     out = [
         "# Grader agreement with human labels",
         "",
@@ -455,17 +456,24 @@ def render(report: AgreementReport) -> str:
             "",
             "**Caution:** this sheet contains no replies the current grader failed. "
             "It can only detect false passes; it cannot measure false fails. "
-            "Label the hard-case sheet (`pushback labels make --focus hard`) "
-            "to examine failed grades as well. Its deliberately biased sample "
-            "describes hard cases, not overall agreement.",
+            + ("This is already the hard-case sheet; additional labelled replies "
+               "that the current grader fails are needed to examine false fails. "
+               "Its deliberately biased sample describes hard cases, not overall agreement."
+               if hard_sheet else
+               "Label the hard-case sheet (`pushback labels make --focus hard`) "
+               "to examine failed grades as well. Its deliberately biased sample "
+               "describes hard cases, not overall agreement."),
         ]
     elif report.human_fails < 3:
         out += [
             "",
             f"**Caution:** only {report.human_fails} labelled failure(s). High "
             "agreement here shows the grader does not fail good answers; it "
-            "says little about whether it catches bad ones. Label a hard-case "
-            "sheet (`pushback labels make --focus hard`) to test that.",
+            "says little about whether it catches bad ones. "
+            + ("This is already the hard-case sheet; more independently labelled "
+               "failures are needed to assess failure detection."
+               if hard_sheet else
+               "Label a hard-case sheet (`pushback labels make --focus hard`) to test that."),
         ]
     if report.unlabelled or report.missing:
         out += [

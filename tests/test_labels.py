@@ -175,6 +175,16 @@ def test_report_warns_when_there_are_too_few_failures(runs, tmp_path):
     assert "Caution" in text and "--focus hard" in text
 
 
+@pytest.mark.parametrize("grader_fails", [0, 1])
+def test_hard_sheet_caution_does_not_ask_to_label_the_same_sheet(grader_fails):
+    result = labels.AgreementReport(splits={s: labels.SplitAgreement(s) for s in ("dev", "test")},
+                                    sheet="hard.csv", human_fails=2, grader_fails=grader_fails)
+    text = labels.render(result)
+    assert "Caution" in text
+    assert "already the hard-case sheet" in text
+    assert "--focus hard" not in text
+
+
 def test_notes_hide_short_version_history():
     note = "Correct is 8 hours. v2: the first real run failed Sonnet for a caveat."
     assert labels._note_for_labeller(note) == "Correct is 8 hours."
