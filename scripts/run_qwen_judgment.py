@@ -48,8 +48,9 @@ def check_server():
     except (OSError, ValueError) as exc:
         raise models.ModelError("Colibri is unreachable at " + URL + "; no model run started") from exc
     served = next((row for row in data["data"] if row["id"] == MODEL), None)
-    if not served or served.get("context_length", served.get("max_model_len")) != CONTEXT:
-        raise models.ModelError("Colibri is not serving the expected Qwen model with a 2,048-token context")
+    capacity = served.get("context_length", served.get("max_model_len")) if served else None
+    if type(capacity) is not int or capacity < CONTEXT:
+        raise models.ModelError("Colibri must serve the expected Qwen model with at least a 2,048-token context")
     return data
 
 

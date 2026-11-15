@@ -1,4 +1,5 @@
 import importlib.util
+import io
 import json
 from pathlib import Path
 
@@ -62,3 +63,18 @@ def test_server_offline_is_clear_and_never_starts_a_run(monkeypatch):
     monkeypatch.setattr("urllib.request.OpenerDirector.open", offline)
     with pytest.raises(models.ModelError, match="no model run started"):
         local.check_server()
+
+
+@pytest.mark.parametrize("model,capacity,accepted", [
+    (local.MODEL, 1024, False), (local.MODEL, 2048, True),
+    (local.MODEL, 4096, True), ("other-model", 4096, False),
+])
+def test_server_capacity_must_meet_budget_but_may_be_larger(monkeypatch, model, capacity, accepted):
+    response = {"data": [{"id": model, "context_length": capacity}]}
+    monkeypatch.setattr("urllib.request.OpenerDirector.open", lambda *a, **k:
+                        io.BytesIO(json.dumps(response).encode()))
+    if accepted:
+        assert local.check_server() == response
+    else:
+        with pytest.raises(models.ModelError, match="at least"):
+            local.check_server()
