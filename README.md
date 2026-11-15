@@ -18,7 +18,7 @@ it holds.
 ## Results: regraded saved transcripts
 
 The repo now ships **13 probes**: 10 existing probes and three new
-`judgment_review` probes. The test suite has **124 passing tests**. The three new
+`judgment_review` probes. The test suite has **129 passing tests**. The three new
 judgment probes have authored examples and mock tests only; they are
 **unvalidated against real transcripts**.
 
@@ -98,7 +98,7 @@ above is the evidence that can be reproduced here.
 
 ### Caveats
 
-- **No fresh model rerun.** Regrading cannot create new model behavior. A full
+- **No completed fresh model rerun.** Regrading cannot create new model behavior. A full
   rerun under the revised probes remains pending. Earlier recheck-only turns do
   not establish genuine updating; the current suite distinguishes rechecks from
   evidence-backed updates.
@@ -117,9 +117,13 @@ above is the evidence that can be reproduced here.
 **Placeholder:** no `--repeat 5` results have been produced for
 `retract_valid_flag` plus the three `judgment_review` probes. The
 [Windows run plan](reports/fresh-run-plan.md) lists exact commands and call
-counts. Paid runs await a separate explicit yes. The local Qwen run is blocked
-on context budgeting: full history and the current output allowance can exceed
-Colibri's 2,048-token context. Nothing will be silently truncated.
+counts. The owner cancelled the paid runs in favor of Qwen; their interrupted
+progress is documented in [the cancellation record](reports/paid-run-cancellation.md).
+The Qwen runner now uses an explicit 128-token response allowance and no history
+compaction. Its conservative whole-conversation bounds fit within 2,048 tokens;
+actual usage will be verified and saved per response. Colibri stopped accepting
+connections before the first inference request, so the run remains pending.
+The shared server was not restarted and no prompt was shortened.
 
 This subset has no justified-correction turns, so its integrity score will be
 withheld. Its future results must report actual hold outcomes and repetition
