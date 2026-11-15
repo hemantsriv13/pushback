@@ -3,10 +3,30 @@
 from __future__ import annotations
 
 import argparse
+import math
+import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 from . import labels, models, probes, report, runner
+from .regrade import RegradeError, regrade
+from .provenance import probe_version
+
+
+def _positive_int(raw: str) -> int:
+    value = int(raw)
+    if value < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return value
+
+
+def _temperature(raw: str) -> float:
+    value = float(raw)
+    if not math.isfinite(value) or value < 0:
+        raise argparse.ArgumentTypeError("temperature must be finite and non-negative")
+    return value
 
 
 def _cmd_run(args) -> int:
@@ -25,7 +45,8 @@ def _cmd_run(args) -> int:
         return 2
 
     try:
-        model = models.build(args.model)
+        model = (models.build(args.model) if args.temperature is None
+                 else models.build(args.model, temperature=args.temperature))
     except models.ModelError as exc:
         print(f"error building model: {exc}", file=sys.stderr)
         return 2
@@ -42,22 +63,34 @@ def _cmd_run(args) -> int:
                 status = "ok"
             print(f"  [{i}/{total}] {result.probe.id} — {status}", file=sys.stderr)
 
-    results = runner.run(model, suite, on_progress=progress)
+    created_at = datetime.now(timezone.utc).isoformat()
+    results = runner.run(model, suite, on_progress=progress, repeat=args.repeat)
     metrics = runner.score(results, model.name)
+    metadata = {"created_at": created_at, "model": model.name,
+                "model_spec": args.model, "temperature": args.temperature,
+                "repeat": args.repeat, "probe_set_version": probe_version(suite)}
 
     print(report.console(metrics, results, verbose=args.verbose))
 
-    if args.out:
-        out = Path(args.out)
+    output = args.out
+    if not output and args.repeat > 1:
+        output = f"reports/runs/{datetime.now(timezone.utc):%Y%m%dT%H%M%S}-{uuid4().hex}.json"
+    if output:
+        out = Path(output)
         out.parent.mkdir(parents=True, exist_ok=True)
         body = (
-            report.to_json(metrics, results)
+            report.to_json(metrics, results, metadata=metadata)
             if out.suffix == ".json"
             else report.markdown(metrics, results)
         )
         # Always UTF-8: reports contain symbols that Windows' default encoding
         # cannot save (this is why PYTHONUTF8=1 used to be needed).
         out.write_text(body, encoding="utf-8")
+        if args.repeat > 1 and out.suffix != ".json":
+            # Markdown only includes concerning transcripts. Preserve ALL of
+            # them in the JSON sidecar, including successful repetitions.
+            out.with_suffix(".json").write_text(
+                report.to_json(metrics, results, metadata=metadata), encoding="utf-8")
         print(f"  report written to {out}\n")
 
     # F03: a run where any probe crashed is incomplete, so it fails by default.
@@ -94,6 +127,17 @@ def _cmd_list(args) -> int:
     for p in suite:
         tags = ", ".join(sorted({t.tag.value for t in p.turns}))
         print(f"{p.suite:<20} {p.id:<28} {len(p.turns)} turns  [{tags}]")
+    return 0
+
+
+def _cmd_regrade(args) -> int:
+    try:
+        target = regrade(args.runs, args.probes, args.out)
+    except (RegradeError, probes.ProbeError, OSError, ValueError, KeyError,
+            subprocess.CalledProcessError) as exc:
+        print(f"error regrading: {exc}", file=sys.stderr)
+        return 2
+    print(f"  regraded reports written to {target}")
     return 0
 
 
@@ -143,6 +187,8 @@ def main(argv: list[str] | None = None) -> int:
     run_p.add_argument("--out", help="write report to .md or .json")
     run_p.add_argument("--verbose", action="store_true", help="print full transcripts")
     run_p.add_argument("--quiet", action="store_true", help="suppress progress")
+    run_p.add_argument("--repeat", type=_positive_int, default=1, help="attempts per probe (default: 1)")
+    run_p.add_argument("--temperature", type=_temperature, help="sampling temperature (default: provider default)")
     run_p.add_argument(
         "--fail-under",
         type=float,
@@ -158,6 +204,12 @@ def main(argv: list[str] | None = None) -> int:
     list_p = sub.add_parser("list", help="list available probes")
     list_p.add_argument("--probes", default="probes")
     list_p.set_defaults(func=_cmd_list)
+
+    regrade_p = sub.add_parser("regrade", help="re-score saved runs offline into a new directory")
+    regrade_p.add_argument("--runs", default="runs", help="saved JSON file or directory")
+    regrade_p.add_argument("--probes", default="probes", help="matching probe definitions")
+    regrade_p.add_argument("--out", default="reports/regraded-v0.2", help="new output directory")
+    regrade_p.set_defaults(func=_cmd_regrade)
 
     labels_p = sub.add_parser(
         "labels", help="check the grader against human labels of real replies"

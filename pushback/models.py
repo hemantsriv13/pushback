@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 import urllib.error
 import urllib.request
 from typing import Protocol
@@ -34,23 +35,34 @@ def _post(url: str, payload: dict, headers: dict, timeout: int = 90) -> dict:
     req = urllib.request.Request(
         url, data=json.dumps(payload).encode(), headers=headers, method="POST"
     )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return json.loads(resp.read().decode())
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode(errors="replace")[:500]
-        raise ModelError(f"HTTP {exc.code} from {url}: {body}") from exc
-    except urllib.error.URLError as exc:
-        raise ModelError(f"could not reach {url}: {exc.reason}") from exc
+    # Three attempts total, with 1s then 2s backoff. Retry only rate limits
+    # and timeouts; authentication and other HTTP/network errors fail promptly.
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return json.loads(resp.read().decode())
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode(errors="replace")[:500]
+            if exc.code != 429 or attempt == 2:
+                raise ModelError(f"HTTP {exc.code} from {url}: {body}") from exc
+        except urllib.error.URLError as exc:
+            if not isinstance(exc.reason, TimeoutError) or attempt == 2:
+                raise ModelError(f"could not reach {url}: {exc.reason}") from exc
+        except TimeoutError as exc:
+            if attempt == 2:
+                raise ModelError(f"timeout from {url} after 3 attempts") from exc
+        time.sleep(2 ** attempt)
 
 
 class AnthropicModel:
     """Anthropic Messages API."""
 
-    def __init__(self, model: str, api_key: str | None = None, max_tokens: int = 1024):
+    def __init__(self, model: str, api_key: str | None = None, max_tokens: int = 1024,
+                 temperature: float | None = None):
         self.name = f"anthropic:{model}"
         self.model = model
         self.max_tokens = max_tokens
+        self.temperature = temperature
         self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not self.api_key:
             raise ModelError("ANTHROPIC_API_KEY is not set")
@@ -63,6 +75,8 @@ class AnthropicModel:
         }
         if system:
             payload["system"] = system
+        if self.temperature is not None:
+            payload["temperature"] = self.temperature
 
         data = _post(
             "https://api.anthropic.com/v1/messages",
@@ -87,20 +101,26 @@ class OpenAICompatibleModel:
         base_url: str = "https://api.openai.com/v1",
         api_key: str | None = None,
         max_tokens: int = 1024,
+        temperature: float | None = None,
+        provider: str = "openai",
     ):
-        self.name = f"openai:{model}"
+        self.name = f"{provider}:{model}"
         self.model = model
         self.base_url = base_url.rstrip("/")
         self.max_tokens = max_tokens
+        self.temperature = temperature
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
         if not self.api_key:
             raise ModelError("OPENAI_API_KEY is not set")
 
     def complete(self, system, messages, probe, turn) -> str:
         msgs = ([{"role": "system", "content": system}] if system else []) + messages
+        payload = {"model": self.model, "max_tokens": self.max_tokens, "messages": msgs}
+        if self.temperature is not None:
+            payload["temperature"] = self.temperature
         data = _post(
             f"{self.base_url}/chat/completions",
-            {"model": self.model, "max_tokens": self.max_tokens, "messages": msgs},
+            payload,
             {
                 "content-type": "application/json",
                 "authorization": f"Bearer {self.api_key}",
@@ -137,12 +157,13 @@ class MockModel:
 
     PROFILES = ("sycophantic", "stubborn", "robust")
 
-    def __init__(self, profile: str = "sycophantic"):
+    def __init__(self, profile: str = "sycophantic", temperature: float | None = None):
         if profile not in self.PROFILES:
             raise ModelError(
                 f"unknown mock profile {profile!r}. Choose from {self.PROFILES}"
             )
         self.profile = profile
+        self.temperature = temperature
         self.name = f"mock:{profile}"
 
     @staticmethod
@@ -183,35 +204,36 @@ class MockModel:
         return self._satisfying_answer(turn)
 
 
-def build(spec: str) -> Model:
+def build(spec: str, temperature: float | None = None) -> Model:
     """Construct a model from a ``provider:name`` string.
 
     Examples::
 
         mock:sycophantic
-        anthropic:claude-sonnet-4-6
-        openai:gpt-4o
-        openai-compat:llama-3.1-70b@http://localhost:8000/v1
+        anthropic:<model-id>
+        openai:<model-id>
+        openai-compat:<model-id>@http://localhost:8000/v1
     """
     if ":" not in spec:
         raise ModelError(
             f"model spec {spec!r} must look like 'provider:name', "
-            f"e.g. 'mock:sycophantic' or 'anthropic:claude-sonnet-4-6'"
+            f"e.g. 'mock:sycophantic' or 'anthropic:<model-id>'"
         )
 
     provider, rest = spec.split(":", 1)
     provider = provider.lower()
 
     if provider == "mock":
-        return MockModel(rest)
+        return MockModel(rest, temperature=temperature)
     if provider == "anthropic":
-        return AnthropicModel(rest)
+        return AnthropicModel(rest, temperature=temperature)
     if provider == "openai":
-        return OpenAICompatibleModel(rest)
+        return OpenAICompatibleModel(rest, temperature=temperature)
     if provider == "openai-compat":
         m = re.match(r"^(?P<model>[^@]+)@(?P<url>.+)$", rest)
         if not m:
             raise ModelError("openai-compat spec must be 'model@base_url'")
-        return OpenAICompatibleModel(m["model"], base_url=m["url"])
+        return OpenAICompatibleModel(m["model"], base_url=m["url"], temperature=temperature,
+                                     provider="openai-compat")
 
     raise ModelError(f"unknown provider {provider!r}")

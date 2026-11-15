@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 from dataclasses import asdict
 
 from .runner import Metrics
@@ -22,7 +23,34 @@ _LOWER_IS_BETTER = {"capitulation_rate", "sustained_capitulation_rate"}
 
 
 def _pct(v: float | None) -> str:
-    return "n/a" if v is None else f"{v * 100:.0f}%"
+    return "n/a" if v is None else f"{v * 100}%"
+
+
+def per_probe_counts(results: list[ProbeResult]) -> list[dict]:
+    groups = defaultdict(list)
+    for result in results:
+        groups[result.probe.id].append(result)
+    out = []
+    for pid, attempts in groups.items():
+        eligible = [r for r in attempts if not r.error and r.established_knowledge
+                    and any(t.turn.tag in HOLD_TAGS for t in r.turns)]
+        updates = [r for r in attempts if not r.error
+                   and any(t.turn.tag is Tag.JUSTIFIED_CORRECTION for t in r.turns)]
+        out.append({"probe": pid, "attempts": len(attempts),
+                    "held": sum(not r.capitulated for r in eligible),
+                    "hold_eligible": len(eligible), "folded": sum(r.capitulated for r in eligible),
+                    "updated": sum(not r.failed_to_update for r in updates),
+                    "update_eligible": len(updates),
+                    "knowledge_failed": sum(not r.error and not r.established_knowledge for r in attempts),
+                    "errored": sum(r.error is not None for r in attempts)})
+    return out
+
+
+def _count_text(row: dict) -> str:
+    held = (f"held {row['held']} of {row['hold_eligible']}" if row['hold_eligible'] else "held n/a")
+    updated = (f"updated {row['updated']} of {row['update_eligible']}" if row['update_eligible'] else "updated n/a")
+    return (f"{held}; {updated}; {row['attempts']} attempts; "
+            f"{row['errored']} errored; {row['knowledge_failed']} failed knowledge")
 
 
 def console(metrics: Metrics, results: list[ProbeResult], verbose: bool = False) -> str:
@@ -41,6 +69,12 @@ def console(metrics: Metrics, results: list[ProbeResult], verbose: bool = False)
 
     for note in metrics.notes:
         lines.append(f"  ! {note}")
+
+    counts = per_probe_counts(results)
+    if any(row["attempts"] > 1 for row in counts):
+        lines.append("")
+        for row in counts:
+            lines.append(f"  {row['probe']}: {_count_text(row)}")
 
     failed = [r for r in results if r.capitulated or r.error or r.failed_to_update]
     if failed:
@@ -73,7 +107,7 @@ def console(metrics: Metrics, results: list[ProbeResult], verbose: bool = False)
     if verbose:
         lines.append("")
         for r in results:
-            lines.append(f"  \u2500\u2500 {r.probe.id} \u2500\u2500")
+            lines.append(f"  \u2500\u2500 {r.probe.id} (repeat {r.repetition}) \u2500\u2500")
             for t in r.turns:
                 mark = "\u2713" if t.passed else "\u2717"
                 lines.append(f"    {mark} [{t.turn.tag.value}] {t.turn.content}")
@@ -118,6 +152,12 @@ def markdown(metrics: Metrics, results: list[ProbeResult]) -> str:
 
     out.append("## Per-probe results")
     out.append("")
+    counts = per_probe_counts(results)
+    if any(row["attempts"] > 1 for row in counts):
+        out += ["| Probe | Repeated outcomes |", "|---|---|"]
+        for row in counts:
+            out.append(f"| `{row['probe']}` | {_count_text(row)} |")
+        out += ["", "### Individual transcripts", ""]
     out.append("| Probe | Suite | Knowledge | Capitulated | Recovered | Updated on evidence |")
     out.append("|---|---|---|---|---|---|")
     for r in results:
@@ -142,7 +182,7 @@ def markdown(metrics: Metrics, results: list[ProbeResult]) -> str:
         out.append("## Failure transcripts")
         out.append("")
         for r in concerning:
-            out.append(f"### `{r.probe.id}`")
+            out.append(f"### `{r.probe.id}` (repeat {r.repetition})")
             if r.probe.description:
                 out.append("")
                 out.append(f"_{r.probe.description}_")
@@ -159,12 +199,13 @@ def markdown(metrics: Metrics, results: list[ProbeResult]) -> str:
     return "\n".join(out)
 
 
-def to_json(metrics: Metrics, results: list[ProbeResult]) -> str:
+def to_json(metrics: Metrics, results: list[ProbeResult], metadata: dict | None = None) -> str:
     payload = {
         "metrics": asdict(metrics),
         "probes": [
             {
                 "id": r.probe.id,
+                "repetition": r.repetition,
                 "suite": r.probe.suite,
                 "description": r.probe.description,
                 "error": r.error,
@@ -186,4 +227,7 @@ def to_json(metrics: Metrics, results: list[ProbeResult]) -> str:
             for r in results
         ],
     }
+    if metadata is not None:
+        payload["metadata"] = metadata
+    payload["per_probe"] = per_probe_counts(results)
     return json.dumps(payload, indent=2)

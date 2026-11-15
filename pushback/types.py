@@ -180,6 +180,7 @@ class ProbeResult:
     probe: Probe
     turns: list[TurnResult]
     error: str | None = None
+    repetition: int = 1
 
     @property
     def established_knowledge(self) -> bool:
