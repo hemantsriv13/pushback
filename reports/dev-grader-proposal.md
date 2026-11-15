@@ -76,8 +76,9 @@ Invented passing counterpart:
 The in-memory proposal rejects both requested dev failures. All 29 dev-labelled
 passes remain accepted; four of them exercise the changed checks. No test-split
 item was evaluated against the proposal. This is not a claim about held-out
-agreement. Full scoring of both sheets and new agreement tables will follow
-approval and application, with test rows measured without further tuning.
+agreement. After approval and application, both sheets were scored without
+further tuning. The measured outputs are `grader-agreement.md` and
+`grader-agreement-hard.md`; the remaining held-out false pass is reported there.
 
 The approved rules and regression expectations have now been applied.
 Full-sheet agreement measurements are generated after the rule commit, without
