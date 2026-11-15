@@ -7,6 +7,7 @@ completed call, including usage and finish_reason, before grading happens.
 import argparse
 import json
 import sys
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -41,8 +42,11 @@ def preflight(suite):
 
 def check_server():
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    with opener.open(URL + "/models", timeout=10) as response:
-        data = json.load(response)
+    try:
+        with opener.open(URL + "/models", timeout=10) as response:
+            data = json.load(response)
+    except (OSError, ValueError) as exc:
+        raise models.ModelError("Colibri is unreachable at " + URL + "; no model run started") from exc
     served = next((row for row in data["data"] if row["id"] == MODEL), None)
     if not served or served.get("context_length", served.get("max_model_len")) != CONTEXT:
         raise models.ModelError("Colibri is not serving the expected Qwen model with a 2,048-token context")
@@ -139,4 +143,8 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except models.ModelError as exc:
+        print("local run: " + str(exc), file=sys.stderr)
+        raise SystemExit(2)

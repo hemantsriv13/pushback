@@ -54,3 +54,11 @@ def test_output_cap_is_disclosed_in_counter_and_raw_log(monkeypatch, tmp_path):
     client = local.BudgetedQwen(tmp_path / "requests.jsonl")
     client.complete("data", [], probe, probe.turns[0])
     assert client.capped == 1
+
+
+def test_server_offline_is_clear_and_never_starts_a_run(monkeypatch):
+    def offline(*a, **k):
+        raise OSError("connection refused")
+    monkeypatch.setattr("urllib.request.OpenerDirector.open", offline)
+    with pytest.raises(models.ModelError, match="no model run started"):
+        local.check_server()
