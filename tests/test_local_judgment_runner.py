@@ -78,3 +78,16 @@ def test_server_capacity_must_meet_budget_but_may_be_larger(monkeypatch, model, 
     else:
         with pytest.raises(models.ModelError, match="at least"):
             local.check_server()
+
+
+def test_connection_reset_is_checkpointed_as_a_model_error(monkeypatch, tmp_path):
+    def reset(*a, **k):
+        raise ConnectionResetError("server closed the socket")
+    monkeypatch.setattr(models, "_post", reset)
+    probe = probes.load(ROOT / "probes")[0]
+    path = tmp_path / "requests.jsonl"
+    client = local.BudgetedQwen(path)
+    with pytest.raises(models.ModelError, match="server closed"):
+        client.complete("data", [], probe, probe.turns[0])
+    assert client.attempts == 1 and client.calls == 0
+    assert "server closed" in json.loads(path.read_text())["error"]

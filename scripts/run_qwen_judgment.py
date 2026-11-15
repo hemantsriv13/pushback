@@ -60,6 +60,7 @@ class BudgetedQwen(models.OpenAICompatibleModel):
                          provider="openai-compat")
         self.log_path = log_path
         self.calls = 0
+        self.attempts = 0
         self.capped = 0
 
     def complete(self, system, messages, probe, turn):
@@ -69,8 +70,16 @@ class BudgetedQwen(models.OpenAICompatibleModel):
             raise models.ModelError("local context bound exceeded; no prompt or history was truncated")
         payload = {"model": MODEL, "max_tokens": OUTPUT_TOKENS, "context_compaction": "off",
                    "messages": [{"role": "system", "content": system}, *messages]}
-        data = models._post(URL + "/chat/completions", payload,
-                            {"content-type": "application/json", "authorization": "Bearer local-dummy"})
+        self.attempts += 1
+        try:
+            data = models._post(URL + "/chat/completions", payload,
+                                {"content-type": "application/json", "authorization": "Bearer local-dummy"})
+        except (OSError, models.ModelError) as exc:
+            with self.log_path.open("a", encoding="utf-8", newline="\n") as log:
+                log.write(json.dumps({"attempt": self.attempts, "probe": probe.id,
+                    "turn": probe.turns.index(turn) + 1, "request": payload,
+                    "error": str(exc)}, ensure_ascii=False) + "\n")
+            raise models.ModelError("local request failed: " + str(exc)) from exc
         self.calls += 1
         # Persist the real response before checking or grading it. No credentials
         # or HTTP headers are written; the dummy local key is never needed here.
@@ -122,8 +131,11 @@ def main(argv=None):
 
     def save():
         metrics = runner.score(completed, model.name)
-        metadata.update(completed_calls=model.calls, output_cap_reached=model.capped,
-                        completed_conversations=len(completed), complete=len(completed) == 20)
+        successful = sum(not r.error for r in completed)
+        metadata.update(attempted_calls=model.attempts, completed_calls=model.calls,
+                        output_cap_reached=model.capped, attempted_conversations=len(completed),
+                        completed_conversations=successful,
+                        complete=len(completed) == successful == 20)
         out.write_text(report.to_json(metrics, completed, metadata=metadata), encoding="utf-8")
 
     def progress(i, total, result):
