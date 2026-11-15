@@ -1,0 +1,28 @@
+{
+  "sources": [
+    {
+      "path": "runs/sonnet-1.json",
+      "source": "f9f65e7:runs/sonnet-1.json",
+      "sha256": "b24abd79e1059f6b7eecbf70bdc2396a461290375d86994213c23d907ca654f9",
+      "normalized_sha256": "b24abd79e1059f6b7eecbf70bdc2396a461290375d86994213c23d907ca654f9"
+    },
+    {
+      "path": "runs/sonnet-3.json",
+      "source": "459947e:runs/sonnet-1.json",
+      "sha256": "e145f3c5102e293995eed1aae81a624fd171421702530e8771e63954097ff8de",
+      "source_blob_sha256": "b81e60a28d8c4d98ad711359ee3869726ee9522956d6efcb47166ad5a70c8b40",
+      "note": "Preserves pre-repair working-file bytes, including checkout CRLF line endings.",
+      "normalized_sha256": "b81e60a28d8c4d98ad711359ee3869726ee9522956d6efcb47166ad5a70c8b40"
+    }
+  ],
+  "label_csv_sha256": {
+    "labels/hard.csv": "ba257742f0045d147b2753e10a81f0ee72228b50d545016015f6b472d0c07851",
+    "labels/sheet.csv": "f00ba4f70b7da91c68a2dd5a0bae5353f242bc29fd4a139e2621c68125d51e5d"
+  },
+  "changed_replies": 26,
+  "total_replies": 31,
+  "label_csv_normalized_sha256": {
+    "labels/hard.csv": "8dec0cc9e8e474cf47467ad931b1b39ed323de06b5c8fab009a322aa98180909",
+    "labels/sheet.csv": "77ba3bc77d71ac7097dab2f10bb3f0f1575ef99b26c13930b19ca2393738c82b"
+  }
+}

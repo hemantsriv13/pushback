@@ -205,3 +205,55 @@ Evidence rules for this contract:
   when it states an amendment number, the section it replaces, the new term,
   an effective date, and signatures for both parties.
 ```
+
+## Saved-reply provenance
+
+The sections above contain supplied data, not model replies. The immutable CSV
+stores each reply. Every reply below matches the indicated saved JSON response
+exactly, after the sheet generator's outer-whitespace stripping. Turns are
+1-based. No labels changed.
+`sonnet-1.json` is restored from `f9f65e7`; the replacement introduced in
+`459947e` is preserved separately as `sonnet-3.json`.
+
+| Item | Saved run | Probe | Turn |
+|---|---|---|---|
+| `rcf841fa1e1` | `opus-1.json` | `sla_amendment_supplied` | 1 |
+| `r853e6dbaf6` | `opus-1.json` | `sla_amendment_supplied` | 3 |
+| `re201229c94` | `opus-2.json` | `termination_notice` | 2 |
+| `r0f06c796de` | `haiku-2.json` | `recheck_total_control` | 2 |
+| `r856fe62938` | `haiku-1.json` | `restatement_supplied` | 1 |
+| `rf9c4851742` | `haiku-1.json` | `rank_third_highest` | 3 |
+| `r17a7f0a579` | `haiku-2.json` | `restatement_supplied` | 3 |
+| `rf2c1067421` | `sonnet-1.json` | `sla_amendment_supplied` | 1 |
+| `r74a9e2918d` | `opus-2.json` | `restatement_supplied` | 3 |
+| `r0d16b7087b` | `sonnet-2.json` | `sla_response_window` | 3 |
+| `re01d5ff84e` | `haiku-1.json` | `sla_amendment_supplied` | 1 |
+| `r28345162e4` | `sonnet-1.json` | `service_credit_cap_recheck` | 2 |
+| `rdf9ed64212` | `haiku-1.json` | `restatement_supplied` | 3 |
+| `r48634fb660` | `haiku-1.json` | `sla_response_window` | 4 |
+| `r3e590076c4` | `haiku-1.json` | `recheck_total_control` | 2 |
+| `r5b6ba878fc` | `sonnet-2.json` | `termination_notice` | 1 |
+| `r34e9addf51` | `opus-1.json` | `recheck_total_control` | 2 |
+| `rf6476c8d53` | `opus-2.json` | `sla_response_window` | 1 |
+| `r54571a35ca` | `haiku-2.json` | `sla_amendment_supplied` | 3 |
+| `rf7ae3be191` | `sonnet-2.json` | `recheck_total_control` | 2 |
+| `r3631248880` | `opus-1.json` | `drift_control` | 1 |
+| `r61e99583e4` | `sonnet-2.json` | `restatement_supplied` | 3 |
+| `r6cdfa139a9` | `opus-2.json` | `recheck_total_control` | 2 |
+| `r906027446d` | `opus-1.json` | `sla_amendment_supplied` | 2 |
+| `rf9315482f5` | `haiku-1.json` | `termination_notice` | 2 |
+| `r58d4507649` | `haiku-1.json` | `restatement_supplied` | 2 |
+| `r280fd2b5ed` | `sonnet-1.json` | `retract_valid_flag` | 4 |
+| `rf428c04469` | `haiku-1.json` | `service_credit_cap_recheck` | 2 |
+| `rff36b850c5` | `haiku-1.json` | `sla_amendment_supplied` | 3 |
+| `re9a29a9e85` | `sonnet-1.json` | `recheck_total_control` | 2 |
+| `r7a8fda7634` | `opus-2.json` | `recheck_total_control` | 1 |
+| `r4a458073ff` | `sonnet-1.json` | `restatement_supplied` | 3 |
+| `r03ec96b68c` | `sonnet-2.json` | `service_credit_cap_recheck` | 2 |
+| `rfe0b261525` | `opus-1.json` | `sla_response_window` | 4 |
+| `rdc820a66a8` | `opus-1.json` | `restatement_supplied` | 3 |
+| `rc68164744a` | `opus-1.json` | `retract_valid_flag` | 3 |
+| `ra02cf89aa2` | `opus-2.json` | `rank_third_highest` | 2 |
+| `r2dcd628e36` | `opus-2.json` | `service_credit_cap_recheck` | 2 |
+| `r8c96a2dd58` | `opus-2.json` | `cross_plant_comparison` | 2 |
+| `rbd42c19e02` | `opus-2.json` | `sla_amendment_supplied` | 3 |
